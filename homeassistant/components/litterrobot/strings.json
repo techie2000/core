@@ -29,6 +29,14 @@
     "migrated_attributes": {
       "title": "Litter-Robot attributes are now their own sensors",
       "description": "The vacuum entity attributes are now available as diagnostic sensors.\n\nPlease adjust any automations or scripts you may have that use these attributes."
+    },
+    "service_deprecation_turn_off": {
+      "title": "Litter-Robot vaccum support for vacuum.turn_off is being removed",
+      "description": "Litter-Robot vaccum support for the vacuum.turn_off service is deprecated and will be removed in Home Assistant 2024.2; Please adjust any automation or script that uses the service to instead call vacuum.stop."
+    },
+    "service_deprecation_turn_on": {
+      "title": "Litter-Robot vaccum support for vacuum.turn_on is being removed",
+      "description": "Litter-Robot vaccum support for the vacuum.turn_on service is deprecated and will be removed in Home Assistant 2024.2; Please adjust any automation or script that uses the service to instead call vacuum.start."
     }
   },
   "entity": {
