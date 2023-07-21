@@ -14,8 +14,10 @@ from homeassistant.components.weather import (
     ATTR_WEATHER_WIND_BEARING,
     ATTR_WEATHER_WIND_GUST_SPEED,
     ATTR_WEATHER_WIND_SPEED,
+    DOMAIN as WEATHER_DOMAIN,
     Forecast,
     WeatherEntity,
+    WeatherEntityFeature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -27,7 +29,8 @@ from homeassistant.const import (
     UnitOfSpeed,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceEntryType
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -47,19 +50,31 @@ async def async_setup_entry(
 ) -> None:
     """Add a weather entity from a config_entry."""
     coordinator: MetDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    entity_registry = er.async_get(hass)
+    if hourly_entity_id := entity_registry.async_get_entity_id(
+        WEATHER_DOMAIN,
+        DOMAIN,
+        _calculate_unique_id(config_entry.data, True),
+    ):
+        entity_registry.async_remove(hourly_entity_id)
     async_add_entities(
         [
             MetWeather(
-                coordinator,
-                config_entry.data,
-                hass.config.units is METRIC_SYSTEM,
-                False,
-            ),
-            MetWeather(
-                coordinator, config_entry.data, hass.config.units is METRIC_SYSTEM, True
+                hass, coordinator, config_entry.data, hass.config.units is METRIC_SYSTEM
             ),
         ]
     )
+
+
+def _calculate_unique_id(config: MappingProxyType[str, Any], hourly: bool) -> str:
+    """Calculate unique ID."""
+    name_appendix = ""
+    if hourly:
+        name_appendix = "-hourly"
+    if config.get(CONF_TRACK_HOME):
+        return f"home{name_appendix}"
+
+    return f"{config[CONF_LATITUDE]}-{config[CONF_LONGITUDE]}{name_appendix}"
 
 
 def format_condition(condition: str) -> str:
@@ -82,56 +97,43 @@ class MetWeather(CoordinatorEntity[MetDataUpdateCoordinator], WeatherEntity):
     _attr_native_precipitation_unit = UnitOfPrecipitationDepth.MILLIMETERS
     _attr_native_pressure_unit = UnitOfPressure.HPA
     _attr_native_wind_speed_unit = UnitOfSpeed.KILOMETERS_PER_HOUR
+    _attr_supported_features = (
+        WeatherEntityFeature.FORECAST_DAILY | WeatherEntityFeature.FORECAST_HOURLY
+    )
 
     def __init__(
         self,
+        hass: HomeAssistant,
         coordinator: MetDataUpdateCoordinator,
         config: MappingProxyType[str, Any],
         is_metric: bool,
-        hourly: bool,
     ) -> None:
         """Initialise the platform with a data instance and site."""
         super().__init__(coordinator)
+        self.hass = hass
+        self._attr_name = self._calculate_name(config)
+        self._attr_unique_id = _calculate_unique_id(config, False)
         self._config = config
         self._is_metric = is_metric
-        self._hourly = hourly
 
-    @property
-    def track_home(self) -> Any | bool:
-        """Return if we are tracking home."""
-        return self._config.get(CONF_TRACK_HOME, False)
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        assert self.platform.config_entry
+        self.platform.config_entry.async_create_task(
+            self.hass, self.async_update_listeners(("daily", "hourly"))
+        )
 
-    @property
-    def unique_id(self) -> str:
-        """Return unique ID."""
-        name_appendix = ""
-        if self._hourly:
-            name_appendix = "-hourly"
-        if self.track_home:
-            return f"home{name_appendix}"
+    def _calculate_name(self, config: MappingProxyType[str, Any]) -> str:
+        """Return the name of the entity."""
+        if (name := config.get(CONF_NAME)) is not None:
+            return name
 
-        return f"{self._config[CONF_LATITUDE]}-{self._config[CONF_LONGITUDE]}{name_appendix}"
+        if config.get(CONF_TRACK_HOME):
+            return self.hass.config.location_name
 
-    @property
-    def name(self) -> str:
-        """Return the name of the sensor."""
-        name = self._config.get(CONF_NAME)
-        name_appendix = ""
-        if self._hourly:
-            name_appendix = " hourly"
-
-        if name is not None:
-            return f"{name}{name_appendix}"
-
-        if self.track_home:
-            return f"{self.hass.config.location_name}{name_appendix}"
-
-        return f"{DEFAULT_NAME}{name_appendix}"
-
-    @property
-    def entity_registry_enabled_default(self) -> bool:
-        """Return if the entity should be enabled when first added to the entity registry."""
-        return not self._hourly
+        return DEFAULT_NAME
 
     @property
     def condition(self) -> str | None:
@@ -190,10 +192,9 @@ class MetWeather(CoordinatorEntity[MetDataUpdateCoordinator], WeatherEntity):
             ATTR_MAP[ATTR_WEATHER_CLOUD_COVERAGE]
         )
 
-    @property
-    def forecast(self) -> list[Forecast] | None:
+    def _forecast(self, hourly: bool) -> list[Forecast] | None:
         """Return the forecast array."""
-        if self._hourly:
+        if hourly:
             met_forecast = self.coordinator.data.hourly_forecast
         else:
             met_forecast = self.coordinator.data.daily_forecast
@@ -213,6 +214,14 @@ class MetWeather(CoordinatorEntity[MetDataUpdateCoordinator], WeatherEntity):
                 )
             ha_forecast.append(ha_item)  # type: ignore[arg-type]
         return ha_forecast
+
+    async def async_forecast_daily(self) -> list[Forecast] | None:
+        """Return the daily forecast in native units."""
+        return self._forecast(False)
+
+    async def async_forecast_hourly(self) -> list[Forecast] | None:
+        """Return the hourly forecast in native units."""
+        return self._forecast(True)
 
     @property
     def device_info(self) -> DeviceInfo:
