@@ -1,4 +1,5 @@
 """Support for Ezviz alarm."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,23 +13,15 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityDescription,
     AlarmControlPanelEntityFeature,
+    AlarmControlPanelState,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    STATE_ALARM_ARMED_AWAY,
-    STATE_ALARM_ARMED_HOME,
-    STATE_ALARM_DISARMED,
-)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import (
-    DATA_COORDINATOR,
-    DOMAIN,
-    MANUFACTURER,
-)
+from .const import DATA_COORDINATOR, DOMAIN, MANUFACTURER
 from .coordinator import EzvizDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,27 +30,20 @@ SCAN_INTERVAL = timedelta(seconds=60)
 PARALLEL_UPDATES = 0
 
 
-@dataclass
-class EzvizAlarmControlPanelEntityDescriptionMixin:
-    """Mixin values for EZVIZ Alarm control panel entities."""
+@dataclass(frozen=True, kw_only=True)
+class EzvizAlarmControlPanelEntityDescription(AlarmControlPanelEntityDescription):
+    """Describe an EZVIZ Alarm control panel entity."""
 
     ezviz_alarm_states: list
-
-
-@dataclass
-class EzvizAlarmControlPanelEntityDescription(
-    AlarmControlPanelEntityDescription, EzvizAlarmControlPanelEntityDescriptionMixin
-):
-    """Describe an EZVIZ Alarm control panel entity."""
 
 
 ALARM_TYPE = EzvizAlarmControlPanelEntityDescription(
     key="ezviz_alarm",
     ezviz_alarm_states=[
         None,
-        STATE_ALARM_DISARMED,
-        STATE_ALARM_ARMED_AWAY,
-        STATE_ALARM_ARMED_HOME,
+        AlarmControlPanelState.DISARMED,
+        AlarmControlPanelState.ARMED_AWAY,
+        AlarmControlPanelState.ARMED_HOME,
     ],
 )
 
@@ -70,12 +56,12 @@ async def async_setup_entry(
         DATA_COORDINATOR
     ]
 
-    device_info: DeviceInfo = {
-        "identifiers": {(DOMAIN, entry.unique_id)},  # type: ignore[arg-type]
-        "name": "EZVIZ Alarm",
-        "model": "EZVIZ Alarm",
-        "manufacturer": MANUFACTURER,
-    }
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, entry.unique_id)},  # type: ignore[arg-type]
+        name="EZVIZ Alarm",
+        model="EZVIZ Alarm",
+        manufacturer=MANUFACTURER,
+    )
 
     async_add_entities(
         [EzvizAlarm(coordinator, entry.entry_id, device_info, ALARM_TYPE)]
@@ -106,7 +92,7 @@ class EzvizAlarm(AlarmControlPanelEntity):
         self._attr_device_info = device_info
         self.entity_description = entity_description
         self.coordinator = coordinator
-        self._attr_state = None
+        self._attr_alarm_state = None
 
     async def async_added_to_hass(self) -> None:
         """Entity added to hass."""
@@ -118,7 +104,7 @@ class EzvizAlarm(AlarmControlPanelEntity):
             if self.coordinator.ezviz_client.api_set_defence_mode(
                 DefenseModeType.HOME_MODE.value
             ):
-                self._attr_state = STATE_ALARM_DISARMED
+                self._attr_alarm_state = AlarmControlPanelState.DISARMED
 
         except PyEzvizError as err:
             raise HomeAssistantError("Cannot disarm EZVIZ alarm") from err
@@ -129,7 +115,7 @@ class EzvizAlarm(AlarmControlPanelEntity):
             if self.coordinator.ezviz_client.api_set_defence_mode(
                 DefenseModeType.AWAY_MODE.value
             ):
-                self._attr_state = STATE_ALARM_ARMED_AWAY
+                self._attr_alarm_state = AlarmControlPanelState.ARMED_AWAY
 
         except PyEzvizError as err:
             raise HomeAssistantError("Cannot arm EZVIZ alarm") from err
@@ -140,7 +126,7 @@ class EzvizAlarm(AlarmControlPanelEntity):
             if self.coordinator.ezviz_client.api_set_defence_mode(
                 DefenseModeType.SLEEP_MODE.value
             ):
-                self._attr_state = STATE_ALARM_ARMED_HOME
+                self._attr_alarm_state = AlarmControlPanelState.ARMED_HOME
 
         except PyEzvizError as err:
             raise HomeAssistantError("Cannot arm EZVIZ alarm") from err
@@ -155,7 +141,7 @@ class EzvizAlarm(AlarmControlPanelEntity):
             _LOGGER.debug(
                 "Updating EZVIZ alarm with response %s", ezviz_alarm_state_number
             )
-            self._attr_state = self.entity_description.ezviz_alarm_states[
+            self._attr_alarm_state = self.entity_description.ezviz_alarm_states[
                 int(ezviz_alarm_state_number)
             ]
 

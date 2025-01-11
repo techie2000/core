@@ -1,4 +1,5 @@
 """Support for EZVIZ sensors."""
+
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -91,8 +92,6 @@ async def async_setup_entry(
 
 class EzvizSensor(EzvizEntity, SensorEntity):
     """Representation of a EZVIZ sensor."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self, coordinator: EzvizDataUpdateCoordinator, serial: str, sensor: str

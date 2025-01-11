@@ -1,4 +1,5 @@
 """The FiveM update coordinator."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -10,10 +11,7 @@ from fivem import FiveM, FiveMServerOfflineError
 
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
     ATTR_PLAYERS_LIST,
@@ -63,9 +61,7 @@ class FiveMDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except FiveMServerOfflineError as err:
             raise UpdateFailed from err
 
-        players_list: list[str] = []
-        for player in server.players:
-            players_list.append(player.name)
+        players_list: list[str] = [player.name for player in server.players]
         players_list.sort()
 
         resources_list = server.resources

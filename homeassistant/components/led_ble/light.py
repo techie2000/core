@@ -1,4 +1,5 @@
 """LED BLE integration light platform."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -17,7 +18,7 @@ from homeassistant.components.light import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -38,7 +39,7 @@ async def async_setup_entry(
     async_add_entities([LEDBLEEntity(data.coordinator, data.device, entry.title)])
 
 
-class LEDBLEEntity(CoordinatorEntity, LightEntity):
+class LEDBLEEntity(CoordinatorEntity[DataUpdateCoordinator[None]], LightEntity):
     """Representation of LEDBLE device."""
 
     _attr_supported_color_modes = {ColorMode.RGB, ColorMode.WHITE}
@@ -47,7 +48,7 @@ class LEDBLEEntity(CoordinatorEntity, LightEntity):
     _attr_supported_features = LightEntityFeature.EFFECT
 
     def __init__(
-        self, coordinator: DataUpdateCoordinator, device: LEDBLE, name: str
+        self, coordinator: DataUpdateCoordinator[None], device: LEDBLE, name: str
     ) -> None:
         """Initialize an ledble light."""
         super().__init__(coordinator)

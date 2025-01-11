@@ -1,4 +1,5 @@
 """Tests for Google Assistant SDK."""
+
 from datetime import timedelta
 import http
 import time
@@ -131,7 +132,9 @@ async def test_send_text_command(
     assert len(entries) == 1
     assert entries[0].state is ConfigEntryState.LOADED
     if configured_language_code:
-        entries[0].options = {"language_code": configured_language_code}
+        hass.config_entries.async_update_entry(
+            entries[0], options={"language_code": configured_language_code}
+        )
 
     command = "turn on home assistant unsupported device"
     with patch(
@@ -146,6 +149,7 @@ async def test_send_text_command(
     mock_text_assistant.assert_called_once_with(
         ExpectedCredentials(), expected_language_code, audio_out=False
     )
+    # pylint:disable-next=unnecessary-dunder-call
     mock_text_assistant.assert_has_calls([call().__enter__().assist(command)])
 
 
@@ -162,20 +166,26 @@ async def test_send_text_commands(
 
     command1 = "open the garage door"
     command2 = "1234"
+    command1_response = "what's the PIN?"
+    command2_response = "opened the garage door"
     with patch(
-        "homeassistant.components.google_assistant_sdk.helpers.TextAssistant"
-    ) as mock_text_assistant:
-        await hass.services.async_call(
+        "homeassistant.components.google_assistant_sdk.helpers.TextAssistant.assist",
+        side_effect=[
+            (command1_response, None, None),
+            (command2_response, None, None),
+        ],
+    ) as mock_assist_call:
+        response = await hass.services.async_call(
             DOMAIN,
             "send_text_command",
             {"command": [command1, command2]},
             blocking=True,
+            return_response=True,
         )
-    mock_text_assistant.assert_called_once_with(
-        ExpectedCredentials(), "en-US", audio_out=False
-    )
-    mock_text_assistant.assert_has_calls([call().__enter__().assist(command1)])
-    mock_text_assistant.assert_has_calls([call().__enter__().assist(command2)])
+        assert response == {
+            "responses": [{"text": command1_response}, {"text": command2_response}]
+        }
+    mock_assist_call.assert_has_calls([call(command1), call(command2)])
 
 
 @pytest.mark.parametrize(
@@ -318,6 +328,7 @@ async def test_conversation_agent(
     """Test GoogleAssistantConversationAgent."""
     await setup_integration()
 
+    assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(hass, "conversation", {})
 
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -325,7 +336,7 @@ async def test_conversation_agent(
     entry = entries[0]
     assert entry.state is ConfigEntryState.LOADED
 
-    agent = await conversation._get_agent_manager(hass).async_get_agent(entry.entry_id)
+    agent = conversation.get_agent_manager(hass).async_get_agent(entry.entry_id)
     assert agent.supported_languages == SUPPORTED_LANGUAGE_CODES
 
     text1 = "tell me a joke"
@@ -356,6 +367,7 @@ async def test_conversation_agent_refresh_token(
     """Test GoogleAssistantConversationAgent when token is expired."""
     await setup_integration()
 
+    assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(hass, "conversation", {})
 
     entries = hass.config_entries.async_entries(DOMAIN)
@@ -407,6 +419,7 @@ async def test_conversation_agent_language_changed(
     """Test GoogleAssistantConversationAgent when language is changed."""
     await setup_integration()
 
+    assert await async_setup_component(hass, "homeassistant", {})
     assert await async_setup_component(hass, "conversation", {})
 
     entries = hass.config_entries.async_entries(DOMAIN)

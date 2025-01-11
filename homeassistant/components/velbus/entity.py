@@ -1,14 +1,16 @@
 """Support for Velbus devices."""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
-from typing import Any, Concatenate, ParamSpec, TypeVar
+from typing import Any, Concatenate
 
 from velbusaio.channels import Channel as VelbusChannel
 
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
 
@@ -42,12 +44,8 @@ class VelbusEntity(Entity):
         self.async_write_ha_state()
 
 
-_T = TypeVar("_T", bound="VelbusEntity")
-_P = ParamSpec("_P")
-
-
-def api_call(
-    func: Callable[Concatenate[_T, _P], Awaitable[None]]
+def api_call[_T: VelbusEntity, **_P](
+    func: Callable[Concatenate[_T, _P], Awaitable[None]],
 ) -> Callable[Concatenate[_T, _P], Coroutine[Any, Any, None]]:
     """Catch command exceptions."""
 

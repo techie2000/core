@@ -1,4 +1,5 @@
 """Support for EZVIZ Switch sensors."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,18 +23,11 @@ from .coordinator import EzvizDataUpdateCoordinator
 from .entity import EzvizEntity
 
 
-@dataclass
-class EzvizSwitchEntityDescriptionMixin:
-    """Mixin values for EZVIZ Switch entities."""
+@dataclass(frozen=True, kw_only=True)
+class EzvizSwitchEntityDescription(SwitchEntityDescription):
+    """Describe a EZVIZ switch."""
 
     supported_ext: str | None
-
-
-@dataclass
-class EzvizSwitchEntityDescription(
-    SwitchEntityDescription, EzvizSwitchEntityDescriptionMixin
-):
-    """Describe a EZVIZ switch."""
 
 
 SWITCH_TYPES: dict[int, EzvizSwitchEntityDescription] = {
@@ -133,8 +127,6 @@ async def async_setup_entry(
 
 class EzvizSwitch(EzvizEntity, SwitchEntity):
     """Representation of a EZVIZ sensor."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self, coordinator: EzvizDataUpdateCoordinator, serial: str, switch_number: int

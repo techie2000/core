@@ -1,4 +1,5 @@
 """DataUpdateCoordinator for the LastFM integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,11 +12,7 @@ from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import (
-    CONF_USERS,
-    DOMAIN,
-    LOGGER,
-)
+from .const import CONF_USERS, DOMAIN, LOGGER
 
 
 def format_track(track: Track | None) -> str | None:

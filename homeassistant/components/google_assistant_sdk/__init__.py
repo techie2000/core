@@ -1,5 +1,8 @@
 """Support for Google Assistant SDK."""
+
 from __future__ import annotations
+
+import dataclasses
 
 import aiohttp
 from gassist_text import TextAssistant
@@ -9,7 +12,12 @@ import voluptuous as vol
 from homeassistant.components import conversation
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_ACCESS_TOKEN, CONF_NAME, Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, discovery, intent
 from homeassistant.helpers.config_entry_oauth2_flow import (
@@ -18,11 +26,18 @@ from homeassistant.helpers.config_entry_oauth2_flow import (
 )
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DATA_MEM_STORAGE, DATA_SESSION, DOMAIN, SUPPORTED_LANGUAGE_CODES
+from .const import (
+    CONF_LANGUAGE_CODE,
+    DATA_MEM_STORAGE,
+    DATA_SESSION,
+    DOMAIN,
+    SUPPORTED_LANGUAGE_CODES,
+)
 from .helpers import (
     GoogleAssistantSDKAudioView,
     InMemoryStorage,
     async_send_text_commands,
+    best_matching_language_code,
 )
 
 SERVICE_SEND_TEXT_COMMAND = "send_text_command"
@@ -90,7 +105,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if entry.state == ConfigEntryState.LOADED
     ]
     if len(loaded_entries) == 1:
-        for service_name in hass.services.async_services()[DOMAIN]:
+        for service_name in hass.services.async_services_for_domain(DOMAIN):
             hass.services.async_remove(DOMAIN, service_name)
 
     conversation.async_unset_agent(hass, entry)
@@ -101,19 +116,30 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_setup_service(hass: HomeAssistant) -> None:
     """Add the services for Google Assistant SDK."""
 
-    async def send_text_command(call: ServiceCall) -> None:
+    async def send_text_command(call: ServiceCall) -> ServiceResponse:
         """Send a text command to Google Assistant SDK."""
         commands: list[str] = call.data[SERVICE_SEND_TEXT_COMMAND_FIELD_COMMAND]
         media_players: list[str] | None = call.data.get(
             SERVICE_SEND_TEXT_COMMAND_FIELD_MEDIA_PLAYER
         )
-        await async_send_text_commands(hass, commands, media_players)
+        command_response_list = await async_send_text_commands(
+            hass, commands, media_players
+        )
+        if call.return_response:
+            return {
+                "responses": [
+                    dataclasses.asdict(command_response)
+                    for command_response in command_response_list
+                ]
+            }
+        return None
 
     hass.services.async_register(
         DOMAIN,
         SERVICE_SEND_TEXT_COMMAND,
         send_text_command,
         schema=SERVICE_SEND_TEXT_COMMAND_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
 
@@ -145,15 +171,24 @@ class GoogleAssistantConversationAgent(conversation.AbstractConversationAgent):
         if not session.valid_token:
             await session.async_ensure_token_valid()
             self.assistant = None
-        if not self.assistant or user_input.language != self.language:
-            credentials = Credentials(session.token[CONF_ACCESS_TOKEN])
-            self.language = user_input.language
+
+        language = best_matching_language_code(
+            self.hass,
+            user_input.language,
+            self.entry.options.get(CONF_LANGUAGE_CODE),
+        )
+
+        if not self.assistant or language != self.language:
+            credentials = Credentials(session.token[CONF_ACCESS_TOKEN])  # type: ignore[no-untyped-call]
+            self.language = language
             self.assistant = TextAssistant(credentials, self.language)
 
-        resp = self.assistant.assist(user_input.text)
+        resp = await self.hass.async_add_executor_job(
+            self.assistant.assist, user_input.text
+        )
         text_response = resp[0] or "<empty response>"
 
-        intent_response = intent.IntentResponse(language=user_input.language)
+        intent_response = intent.IntentResponse(language=language)
         intent_response.async_set_speech(text_response)
         return conversation.ConversationResult(
             response=intent_response, conversation_id=user_input.conversation_id

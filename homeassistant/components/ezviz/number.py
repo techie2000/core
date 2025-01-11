@@ -1,4 +1,5 @@
 """Support for EZVIZ number controls."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,25 +31,17 @@ PARALLEL_UPDATES = 0
 _LOGGER = logging.getLogger(__name__)
 
 
-@dataclass
-class EzvizNumberEntityDescriptionMixin:
-    """Mixin values for EZVIZ Number entities."""
+@dataclass(frozen=True, kw_only=True)
+class EzvizNumberEntityDescription(NumberEntityDescription):
+    """Describe a EZVIZ Number."""
 
     supported_ext: str
     supported_ext_value: list
 
 
-@dataclass
-class EzvizNumberEntityDescription(
-    NumberEntityDescription, EzvizNumberEntityDescriptionMixin
-):
-    """Describe a EZVIZ Number."""
-
-
 NUMBER_TYPE = EzvizNumberEntityDescription(
     key="detection_sensibility",
-    name="Detection sensitivity",
-    icon="mdi:eye",
+    translation_key="detection_sensibility",
     entity_category=EntityCategory.CONFIG,
     native_min_value=0,
     native_step=1,
@@ -66,18 +59,16 @@ async def async_setup_entry(
     ]
 
     async_add_entities(
-        EzvizSensor(coordinator, camera, value, entry.entry_id)
+        EzvizNumber(coordinator, camera, value, entry.entry_id)
         for camera in coordinator.data
-        for capibility, value in coordinator.data[camera]["supportExt"].items()
-        if capibility == NUMBER_TYPE.supported_ext
+        for capability, value in coordinator.data[camera]["supportExt"].items()
+        if capability == NUMBER_TYPE.supported_ext
         if value in NUMBER_TYPE.supported_ext_value
     )
 
 
-class EzvizSensor(EzvizBaseEntity, NumberEntity):
+class EzvizNumber(EzvizBaseEntity, NumberEntity):
     """Representation of a EZVIZ number entity."""
-
-    _attr_has_entity_name = True
 
     def __init__(
         self,
@@ -86,7 +77,7 @@ class EzvizSensor(EzvizBaseEntity, NumberEntity):
         value: str,
         config_entry_id: str,
     ) -> None:
-        """Initialize the sensor."""
+        """Initialize the entity."""
         super().__init__(coordinator, serial)
         self.sensitivity_type = 3 if value == "3" else 0
         self._attr_native_max_value = 100 if value == "3" else 6

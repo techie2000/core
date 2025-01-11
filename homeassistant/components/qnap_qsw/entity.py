@@ -1,4 +1,5 @@
 """Entity classes for the QNAP QSW integration."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,8 +19,8 @@ from aioqsw.const import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_URL
 from homeassistant.core import callback
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
-from homeassistant.helpers.entity import DeviceInfo, EntityDescription
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import MANUFACTURER
@@ -83,13 +84,14 @@ class QswDataEntity(CoordinatorEntity[QswDataCoordinator]):
         return value
 
 
-@dataclass
+@dataclass(frozen=True)
 class QswEntityDescriptionMixin:
     """Mixin to describe a QSW entity."""
 
     subkey: str
 
 
+@dataclass(frozen=True)
 class QswEntityDescription(EntityDescription, QswEntityDescriptionMixin):
     """Class to describe a QSW entity."""
 
@@ -119,6 +121,8 @@ class QswSensorEntity(QswDataEntity):
 
 class QswFirmwareEntity(CoordinatorEntity[QswFirmwareCoordinator]):
     """Define a QNAP QSW firmware entity."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self,

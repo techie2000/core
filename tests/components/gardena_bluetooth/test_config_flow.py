@@ -1,4 +1,5 @@
 """Test the Gardena Bluetooth config flow."""
+
 from unittest.mock import Mock
 
 from gardena_bluetooth.exceptions import CharacteristicNotFound
@@ -17,9 +18,7 @@ from . import (
     WATER_TIMER_UNNAMED_SERVICE_INFO,
 )
 
-from tests.components.bluetooth import (
-    inject_bluetooth_service_info,
-)
+from tests.components.bluetooth import inject_bluetooth_service_info
 
 pytestmark = pytest.mark.usefixtures("mock_setup_entry")
 
@@ -32,6 +31,7 @@ async def test_user_selection(
 
     inject_bluetooth_service_info(hass, WATER_TIMER_SERVICE_INFO)
     inject_bluetooth_service_info(hass, WATER_TIMER_UNNAMED_SERVICE_INFO)
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -102,13 +102,12 @@ async def test_bluetooth(
 ) -> None:
     """Test bluetooth device discovery."""
 
+    # Inject the service info will trigger the flow to start
     inject_bluetooth_service_info(hass, WATER_TIMER_SERVICE_INFO)
+    await hass.async_block_till_done(wait_background_tasks=True)
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_BLUETOOTH},
-        data=WATER_TIMER_SERVICE_INFO,
-    )
+    result = next(iter(hass.config_entries.flow.async_progress_by_handler(DOMAIN)))
+
     assert result == snapshot
 
     result = await hass.config_entries.flow.async_configure(

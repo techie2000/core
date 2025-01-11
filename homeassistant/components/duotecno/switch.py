@@ -1,16 +1,17 @@
 """Support for Duotecno switches."""
+
 from typing import Any
 
+from duotecno.controller import PyDuotecno
 from duotecno.unit import SwitchUnit
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .entity import DuotecnoEntity
+from .entity import DuotecnoEntity, api_call
 
 
 async def async_setup_entry(
@@ -19,7 +20,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Velbus switch based on config_entry."""
-    cntrl = hass.data[DOMAIN][entry.entry_id]
+    cntrl: PyDuotecno = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
         DuotecnoSwitch(channel) for channel in cntrl.get_units("SwitchUnit")
     )
@@ -35,16 +36,12 @@ class DuotecnoSwitch(DuotecnoEntity, SwitchEntity):
         """Return true if the switch is on."""
         return self._unit.is_on()
 
+    @api_call
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the switch to turn on."""
-        try:
-            await self._unit.turn_on()
-        except OSError as err:
-            raise HomeAssistantError("Transmit for the turn_on packet failed") from err
+        await self._unit.turn_on()
 
+    @api_call
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Instruct the switch to turn off."""
-        try:
-            await self._unit.turn_off()
-        except OSError as err:
-            raise HomeAssistantError("Transmit for the turn_off packet failed") from err
+        await self._unit.turn_off()

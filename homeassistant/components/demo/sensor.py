@@ -1,4 +1,5 @@
 """Demo platform that has a couple of fake sensors."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -22,7 +23,7 @@ from homeassistant.const import (
     UnitOfVolume,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
 
@@ -148,7 +149,7 @@ class DemoSensor(SensorEntity):
         self,
         unique_id: str,
         device_name: str | None,
-        state: float | int | str | None,
+        state: float | str | None,
         device_class: SensorDeviceClass,
         state_class: SensorStateClass | None,
         unit_of_measurement: str | None,

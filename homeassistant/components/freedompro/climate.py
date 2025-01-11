@@ -1,4 +1,5 @@
 """Support for Freedompro climate."""
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, CONF_API_KEY, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import aiohttp_client
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -64,7 +65,11 @@ class Device(CoordinatorEntity[FreedomproDataUpdateCoordinator], ClimateEntity):
     _attr_hvac_modes = SUPPORTED_HVAC_MODES
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_name = None
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.TURN_OFF
+        | ClimateEntityFeature.TURN_ON
+    )
     _attr_current_temperature = 0
     _attr_target_temperature = 0
     _attr_hvac_mode = HVACMode.OFF

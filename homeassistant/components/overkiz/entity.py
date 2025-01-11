@@ -1,4 +1,5 @@
 """Parent class for every Overkiz device."""
+
 from __future__ import annotations
 
 from typing import cast
@@ -6,7 +7,8 @@ from typing import cast
 from pyoverkiz.enums import OverkizAttribute, OverkizState
 from pyoverkiz.models import Device
 
-from homeassistant.helpers.entity import DeviceInfo, EntityDescription
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN

@@ -1,4 +1,5 @@
 """Support for UK Met Office weather service."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,7 +30,7 @@ from homeassistant.helpers.update_coordinator import (
 from . import get_device_info
 from .const import (
     ATTRIBUTION,
-    CONDITION_CLASSES,
+    CONDITION_MAP,
     DOMAIN,
     METOFFICE_COORDINATES,
     METOFFICE_DAILY_COORDINATOR,
@@ -221,11 +222,7 @@ class MetOfficeCurrentSensor(
         elif self.entity_description.key == "weather" and hasattr(
             self.coordinator.data.now, self.entity_description.key
         ):
-            value = [
-                k
-                for k, v in CONDITION_CLASSES.items()
-                if self.coordinator.data.now.weather.value in v
-            ][0]
+            value = CONDITION_MAP.get(self.coordinator.data.now.weather.value)
 
         elif hasattr(self.coordinator.data.now, self.entity_description.key):
             value = getattr(self.coordinator.data.now, self.entity_description.key)
@@ -255,6 +252,6 @@ class MetOfficeCurrentSensor(
         return {
             ATTR_LAST_UPDATE: self.coordinator.data.now.date,
             ATTR_SENSOR_ID: self.entity_description.key,
-            ATTR_SITE_ID: self.coordinator.data.site.id,
+            ATTR_SITE_ID: self.coordinator.data.site.location_id,
             ATTR_SITE_NAME: self.coordinator.data.site.name,
         }

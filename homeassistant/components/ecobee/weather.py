@@ -1,4 +1,5 @@
 """Support for displaying weather info from Ecobee API."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -24,7 +25,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
@@ -58,7 +59,7 @@ class EcobeeWeather(WeatherEntity):
     _attr_native_pressure_unit = UnitOfPressure.HPA
     _attr_native_temperature_unit = UnitOfTemperature.FAHRENHEIT
     _attr_native_visibility_unit = UnitOfLength.METERS
-    _attr_native_wind_speed_unit = UnitOfSpeed.METERS_PER_SECOND
+    _attr_native_wind_speed_unit = UnitOfSpeed.MILES_PER_HOUR
     _attr_has_entity_name = True
     _attr_name = None
     _attr_supported_features = WeatherEntityFeature.FORECAST_DAILY
@@ -171,7 +172,7 @@ class EcobeeWeather(WeatherEntity):
 
         forecasts: list[Forecast] = []
         date = dt_util.utcnow()
-        for day in range(0, 5):
+        for day in range(5):
             forecast = _process_forecast(self.weather["forecasts"][day])
             if forecast is None:
                 continue
@@ -183,11 +184,6 @@ class EcobeeWeather(WeatherEntity):
             return forecasts
         return None
 
-    @property
-    def forecast(self) -> list[Forecast] | None:
-        """Return the forecast array."""
-        return self._forecast()
-
     async def async_forecast_daily(self) -> list[Forecast] | None:
         """Return the daily forecast in native units."""
         return self._forecast()
@@ -197,6 +193,7 @@ class EcobeeWeather(WeatherEntity):
         await self.data.update()
         thermostat = self.data.ecobee.get_thermostat(self._index)
         self.weather = thermostat.get("weather")
+        await self.async_update_listeners(("daily",))
 
 
 def _process_forecast(json):
