@@ -1,4 +1,5 @@
 """Update coordinator for Goodwe."""
+
 from __future__ import annotations
 
 import logging
@@ -18,6 +19,8 @@ _LOGGER = logging.getLogger(__name__)
 class GoodweUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Gather data for the energy device."""
 
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -28,9 +31,9 @@ class GoodweUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=entry.title,
             update_interval=SCAN_INTERVAL,
-            update_method=self._async_update_data,
         )
         self.inverter: Inverter = inverter
         self._last_data: dict[str, Any] = {}

@@ -1,32 +1,28 @@
 """Support for Velbus covers."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from duotecno.unit import DuoswitchUnit
 
-from homeassistant.components.cover import (
-    CoverEntity,
-    CoverEntityFeature,
-)
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.cover import CoverEntity, CoverEntityFeature
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
-from .entity import DuotecnoEntity
+from . import DuotecnoConfigEntry
+from .entity import DuotecnoEntity, api_call
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: DuotecnoConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the duoswitch endities."""
-    cntrl = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        DuotecnoCover(channel) for channel in cntrl.get_units("DuoswitchUnit")
+        DuotecnoCover(channel)
+        for channel in entry.runtime_data.get_units("DuoswitchUnit")
     )
 
 
@@ -34,13 +30,9 @@ class DuotecnoCover(DuotecnoEntity, CoverEntity):
     """Representation a Velbus cover."""
 
     _unit: DuoswitchUnit
-
-    def __init__(self, unit: DuoswitchUnit) -> None:
-        """Initialize the cover."""
-        super().__init__(unit)
-        self._attr_supported_features = (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
-        )
+    _attr_supported_features = (
+        CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+    )
 
     @property
     def is_closed(self) -> bool | None:
@@ -57,29 +49,17 @@ class DuotecnoCover(DuotecnoEntity, CoverEntity):
         """Return if the cover is closing."""
         return self._unit.is_closing()
 
+    @api_call
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Open the cover."""
-        try:
-            await self._unit.open()
-        except OSError as err:
-            raise HomeAssistantError(
-                "Transmit for the open_cover packet failed"
-            ) from err
+        await self._unit.open()
 
+    @api_call
     async def async_close_cover(self, **kwargs: Any) -> None:
         """Close the cover."""
-        try:
-            await self._unit.close()
-        except OSError as err:
-            raise HomeAssistantError(
-                "Transmit for the close_cover packet failed"
-            ) from err
+        await self._unit.close()
 
+    @api_call
     async def async_stop_cover(self, **kwargs: Any) -> None:
         """Stop the cover."""
-        try:
-            await self._unit.stop()
-        except OSError as err:
-            raise HomeAssistantError(
-                "Transmit for the stop_cover packet failed"
-            ) from err
+        await self._unit.stop()

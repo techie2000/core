@@ -1,4 +1,5 @@
 """Support for Wyoming speech-to-text services."""
+
 from collections.abc import AsyncIterable
 import logging
 
@@ -9,11 +10,12 @@ from wyoming.client import AsyncTcpClient
 from homeassistant.components import stt
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import DOMAIN, SAMPLE_CHANNELS, SAMPLE_RATE, SAMPLE_WIDTH
 from .data import WyomingService
 from .error import WyomingError
+from .models import DomainDataItem
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,13 +23,13 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Wyoming speech-to-text."""
-    service: WyomingService = hass.data[DOMAIN][config_entry.entry_id]
+    item: DomainDataItem = hass.data[DOMAIN][config_entry.entry_id]
     async_add_entities(
         [
-            WyomingSttProvider(config_entry, service),
+            WyomingSttProvider(config_entry, item.service),
         ]
     )
 
@@ -124,8 +126,8 @@ class WyomingSttProvider(stt.SpeechToTextEntity):
                         text = transcript.text
                         break
 
-        except (OSError, WyomingError) as err:
-            _LOGGER.exception("Error processing audio stream: %s", err)
+        except (OSError, WyomingError):
+            _LOGGER.exception("Error processing audio stream")
             return stt.SpeechResult(None, stt.SpeechResultState.ERROR)
 
         return stt.SpeechResult(

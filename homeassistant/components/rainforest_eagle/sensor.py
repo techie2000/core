@@ -1,4 +1,5 @@
 """Support for the Rainforest Eagle energy monitor."""
+
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -10,13 +11,13 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
-from .data import EagleDataCoordinator
+from .coordinator import EagleDataCoordinator
 
 SENSORS = (
     SensorEntityDescription(
@@ -44,7 +45,9 @@ SENSORS = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up a config entry."""
     coordinator = hass.data[DOMAIN][entry.entry_id]
@@ -75,11 +78,13 @@ class EagleSensor(CoordinatorEntity[EagleDataCoordinator], SensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = entity_description
-
-    @property
-    def unique_id(self) -> str | None:
-        """Return unique ID of entity."""
-        return f"{self.coordinator.cloud_id}-${self.coordinator.hardware_address}-{self.entity_description.key}"
+        self._attr_unique_id = f"{coordinator.cloud_id}-${coordinator.hardware_address}-{entity_description.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.cloud_id)},
+            manufacturer="Rainforest Automation",
+            model=coordinator.model,
+            name=coordinator.model,
+        )
 
     @property
     def available(self) -> bool:
@@ -90,13 +95,3 @@ class EagleSensor(CoordinatorEntity[EagleDataCoordinator], SensorEntity):
     def native_value(self) -> StateType:
         """Return native value of the sensor."""
         return self.coordinator.data.get(self.entity_description.key)
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.cloud_id)},
-            manufacturer="Rainforest Automation",
-            model=self.coordinator.model,
-            name=self.coordinator.model,
-        )

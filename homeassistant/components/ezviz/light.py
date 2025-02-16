@@ -1,4 +1,5 @@
 """Support for EZVIZ light entity."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,17 +8,15 @@ from pyezviz.constants import DeviceCatagories, DeviceSwitchType, SupportExt
 from pyezviz.exceptions import HTTPError, PyEzvizError
 
 from homeassistant.components.light import ATTR_BRIGHTNESS, ColorMode, LightEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util.percentage import (
     percentage_to_ranged_value,
     ranged_value_to_percentage,
 )
 
-from .const import DATA_COORDINATOR, DOMAIN
-from .coordinator import EzvizDataUpdateCoordinator
+from .coordinator import EzvizConfigEntry, EzvizDataUpdateCoordinator
 from .entity import EzvizEntity
 
 PARALLEL_UPDATES = 1
@@ -25,18 +24,18 @@ BRIGHTNESS_RANGE = (1, 255)
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: EzvizConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up EZVIZ lights based on a config entry."""
-    coordinator: EzvizDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id][
-        DATA_COORDINATOR
-    ]
+    coordinator = entry.runtime_data
 
     async_add_entities(
         EzvizLight(coordinator, camera)
         for camera in coordinator.data
-        for capibility, value in coordinator.data[camera]["supportExt"].items()
-        if capibility == str(SupportExt.SupportAlarmLight.value)
+        for capability, value in coordinator.data[camera]["supportExt"].items()
+        if capability == str(SupportExt.SupportAlarmLight.value)
         if value == "1"
     )
 
@@ -44,7 +43,7 @@ async def async_setup_entry(
 class EzvizLight(EzvizEntity, LightEntity):
     """Representation of a EZVIZ light."""
 
-    _attr_has_entity_name = True
+    _attr_translation_key = "light"
     _attr_color_mode = ColorMode.BRIGHTNESS
     _attr_supported_color_modes = {ColorMode.BRIGHTNESS}
 
@@ -60,7 +59,6 @@ class EzvizLight(EzvizEntity, LightEntity):
             == DeviceCatagories.BATTERY_CAMERA_DEVICE_CATEGORY.value
         )
         self._attr_unique_id = f"{serial}_Light"
-        self._attr_name = "Light"
         self._attr_is_on = self.data["switches"][DeviceSwitchType.ALARM_LIGHT.value]
         self._attr_brightness = round(
             percentage_to_ranged_value(

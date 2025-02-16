@@ -1,155 +1,152 @@
 """Test OpenSky config flow."""
+
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
+from python_opensky.exceptions import OpenSkyUnauthenticatedError
 
 from homeassistant.components.opensky.const import (
     CONF_ALTITUDE,
-    DEFAULT_NAME,
+    CONF_CONTRIBUTING_USER,
     DOMAIN,
 )
-from homeassistant.config_entries import SOURCE_IMPORT, SOURCE_USER
-from homeassistant.const import CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME, CONF_RADIUS
+from homeassistant.config_entries import SOURCE_USER
+from homeassistant.const import (
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_PASSWORD,
+    CONF_RADIUS,
+    CONF_USERNAME,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from . import patch_setup_entry
+from . import setup_integration
 
 from tests.common import MockConfigEntry
 
 
-async def test_full_user_flow(hass: HomeAssistant) -> None:
+async def test_full_user_flow(hass: HomeAssistant, mock_setup_entry) -> None:
     """Test the full user configuration flow."""
-    with patch_setup_entry():
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_USER},
-        )
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_USER},
+    )
 
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            user_input={
-                CONF_RADIUS: 10,
-                CONF_LATITUDE: 0.0,
-                CONF_LONGITUDE: 0.0,
-                CONF_ALTITUDE: 0,
-            },
-        )
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        assert result["title"] == "OpenSky"
-        assert result["data"] == {
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_RADIUS: 10,
             CONF_LATITUDE: 0.0,
             CONF_LONGITUDE: 0.0,
-        }
-        assert result["options"] == {
-            CONF_ALTITUDE: 0.0,
-            CONF_RADIUS: 10.0,
-        }
+            CONF_ALTITUDE: 0,
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "OpenSky"
+    assert result["data"] == {
+        CONF_LATITUDE: 0.0,
+        CONF_LONGITUDE: 0.0,
+    }
+    assert result["options"] == {
+        CONF_ALTITUDE: 0.0,
+        CONF_RADIUS: 10.0,
+    }
 
 
 @pytest.mark.parametrize(
-    ("config", "title", "data", "options"),
+    ("user_input", "error"),
     [
         (
-            {CONF_RADIUS: 10.0},
-            DEFAULT_NAME,
-            {
-                CONF_LATITUDE: 32.87336,
-                CONF_LONGITUDE: -117.22743,
-            },
-            {
-                CONF_RADIUS: 10000.0,
-                CONF_ALTITUDE: 0,
-            },
+            {CONF_USERNAME: "homeassistant", CONF_CONTRIBUTING_USER: False},
+            "password_missing",
         ),
+        ({CONF_PASSWORD: "secret", CONF_CONTRIBUTING_USER: False}, "username_missing"),
+        ({CONF_CONTRIBUTING_USER: True}, "no_authentication"),
         (
             {
-                CONF_RADIUS: 10.0,
-                CONF_NAME: "My home",
+                CONF_USERNAME: "homeassistant",
+                CONF_PASSWORD: "secret",
+                CONF_CONTRIBUTING_USER: True,
             },
-            "My home",
-            {
-                CONF_LATITUDE: 32.87336,
-                CONF_LONGITUDE: -117.22743,
-            },
-            {
-                CONF_RADIUS: 10000.0,
-                CONF_ALTITUDE: 0,
-            },
-        ),
-        (
-            {
-                CONF_RADIUS: 10.0,
-                CONF_LATITUDE: 10.0,
-                CONF_LONGITUDE: -100.0,
-            },
-            DEFAULT_NAME,
-            {
-                CONF_LATITUDE: 10.0,
-                CONF_LONGITUDE: -100.0,
-            },
-            {
-                CONF_RADIUS: 10000.0,
-                CONF_ALTITUDE: 0,
-            },
-        ),
-        (
-            {CONF_RADIUS: 10.0, CONF_ALTITUDE: 100.0},
-            DEFAULT_NAME,
-            {
-                CONF_LATITUDE: 32.87336,
-                CONF_LONGITUDE: -117.22743,
-            },
-            {
-                CONF_RADIUS: 10000.0,
-                CONF_ALTITUDE: 100.0,
-            },
+            "invalid_auth",
         ),
     ],
 )
-async def test_import_flow(
+async def test_options_flow_failures(
     hass: HomeAssistant,
-    config: dict[str, Any],
-    title: str,
-    data: dict[str, Any],
-    options: dict[str, Any],
+    mock_setup_entry: AsyncMock,
+    opensky_client: AsyncMock,
+    config_entry: MockConfigEntry,
+    user_input: dict[str, Any],
+    error: str,
 ) -> None:
-    """Test the import flow."""
-    with patch_setup_entry():
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": SOURCE_IMPORT}, data=config
-        )
-        await hass.async_block_till_done()
-        assert result["type"] == FlowResultType.CREATE_ENTRY
-        assert result["title"] == title
-        assert result["options"] == options
-        assert result["data"] == data
+    """Test load and unload entry."""
+    await setup_integration(hass, config_entry)
 
+    opensky_client.authenticate.side_effect = OpenSkyUnauthenticatedError
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    await hass.async_block_till_done()
 
-async def test_importing_already_exists_flow(hass: HomeAssistant) -> None:
-    """Test the import flow when same location already exists."""
-    MockConfigEntry(
-        domain=DOMAIN,
-        title=DEFAULT_NAME,
-        data={},
-        options={
-            CONF_LATITUDE: 32.87336,
-            CONF_LONGITUDE: -117.22743,
-            CONF_RADIUS: 10.0,
-            CONF_ALTITUDE: 100.0,
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={CONF_RADIUS: 10000, **user_input},
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert result["errors"]["base"] == error
+    opensky_client.authenticate.side_effect = None
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_RADIUS: 10000,
+            CONF_USERNAME: "homeassistant",
+            CONF_PASSWORD: "secret",
+            CONF_CONTRIBUTING_USER: True,
         },
-    ).add_to_hass(hass)
-    with patch_setup_entry():
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN,
-            context={"source": SOURCE_IMPORT},
-            data={
-                CONF_LATITUDE: 32.87336,
-                CONF_LONGITUDE: -117.22743,
-                CONF_RADIUS: 10.0,
-                CONF_ALTITUDE: 100.0,
-            },
-        )
-        await hass.async_block_till_done()
-        assert result["type"] == FlowResultType.ABORT
-        assert result["reason"] == "already_configured"
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        CONF_RADIUS: 10000,
+        CONF_USERNAME: "homeassistant",
+        CONF_PASSWORD: "secret",
+        CONF_CONTRIBUTING_USER: True,
+    }
+
+
+async def test_options_flow(
+    hass: HomeAssistant,
+    mock_setup_entry: AsyncMock,
+    opensky_client: AsyncMock,
+    config_entry: MockConfigEntry,
+) -> None:
+    """Test options flow."""
+    await setup_integration(hass, config_entry)
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            CONF_RADIUS: 10000,
+            CONF_USERNAME: "homeassistant",
+            CONF_PASSWORD: "secret",
+            CONF_CONTRIBUTING_USER: True,
+        },
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        CONF_RADIUS: 10000,
+        CONF_USERNAME: "homeassistant",
+        CONF_PASSWORD: "secret",
+        CONF_CONTRIBUTING_USER: True,
+    }

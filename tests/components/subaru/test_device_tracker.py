@@ -1,4 +1,5 @@
 """Test Subaru device tracker."""
+
 from copy import deepcopy
 from unittest.mock import patch
 
@@ -9,18 +10,15 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .api_responses import EXPECTED_STATE_EV_IMPERIAL, VEHICLE_STATUS_EV
-from .conftest import (
-    MOCK_API_FETCH,
-    MOCK_API_GET_DATA,
-    advance_time_to_next_fetch,
-)
+from .conftest import MOCK_API_FETCH, MOCK_API_GET_DATA, advance_time_to_next_fetch
 
 DEVICE_ID = "device_tracker.test_vehicle_2"
 
 
-async def test_device_tracker(hass: HomeAssistant, ev_entry) -> None:
+async def test_device_tracker(
+    hass: HomeAssistant, entity_registry: er.EntityRegistry, ev_entry
+) -> None:
     """Test subaru device tracker entity exists and has correct info."""
-    entity_registry = er.async_get(hass)
     entry = entity_registry.async_get(DEVICE_ID)
     assert entry
     actual = hass.states.get(DEVICE_ID)

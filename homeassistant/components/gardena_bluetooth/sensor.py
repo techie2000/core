@@ -1,10 +1,11 @@
 """Support for switch entities."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from gardena_bluetooth.const import Battery, Valve
+from gardena_bluetooth.const import Battery, Sensor, Valve
 from gardena_bluetooth.parse import Characteristic
 
 from homeassistant.components.sensor import (
@@ -13,25 +14,29 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import homeassistant.util.dt as dt_util
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
-from .coordinator import (
-    Coordinator,
-    GardenaBluetoothDescriptorEntity,
-    GardenaBluetoothEntity,
-)
+from .coordinator import GardenaBluetoothConfigEntry, GardenaBluetoothCoordinator
+from .entity import GardenaBluetoothDescriptorEntity, GardenaBluetoothEntity
 
 
-@dataclass
+@dataclass(frozen=True)
 class GardenaBluetoothSensorEntityDescription(SensorEntityDescription):
     """Description of entity."""
 
     char: Characteristic = field(default_factory=lambda: Characteristic(""))
+    connected_state: Characteristic | None = None
+
+    @property
+    def context(self) -> set[str]:
+        """Context needed for update coordinator."""
+        data = {self.char.uuid}
+        if self.connected_state:
+            data.add(self.connected_state.uuid)
+        return data
 
 
 DESCRIPTIONS = (
@@ -51,16 +56,51 @@ DESCRIPTIONS = (
         native_unit_of_measurement=PERCENTAGE,
         char=Battery.battery_level,
     ),
+    GardenaBluetoothSensorEntityDescription(
+        key=Sensor.battery_level.uuid,
+        translation_key="sensor_battery_level",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.BATTERY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=PERCENTAGE,
+        char=Sensor.battery_level,
+        connected_state=Sensor.connected_state,
+    ),
+    GardenaBluetoothSensorEntityDescription(
+        key=Sensor.value.uuid,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.MOISTURE,
+        native_unit_of_measurement=PERCENTAGE,
+        char=Sensor.value,
+        connected_state=Sensor.connected_state,
+    ),
+    GardenaBluetoothSensorEntityDescription(
+        key=Sensor.type.uuid,
+        translation_key="sensor_type",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        char=Sensor.type,
+        connected_state=Sensor.connected_state,
+    ),
+    GardenaBluetoothSensorEntityDescription(
+        key=Sensor.measurement_timestamp.uuid,
+        translation_key="sensor_measurement_timestamp",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        char=Sensor.measurement_timestamp,
+        connected_state=Sensor.connected_state,
+    ),
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: GardenaBluetoothConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Gardena Bluetooth sensor based on a config entry."""
-    coordinator: Coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     entities: list[GardenaBluetoothEntity] = [
-        GardenaBluetoothSensor(coordinator, description)
+        GardenaBluetoothSensor(coordinator, description, description.context)
         for description in DESCRIPTIONS
         if description.key in coordinator.characteristics
     ]
@@ -77,10 +117,14 @@ class GardenaBluetoothSensor(GardenaBluetoothDescriptorEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         value = self.coordinator.get_cached(self.entity_description.char)
         if isinstance(value, datetime):
-            value = value.replace(
-                tzinfo=dt_util.get_time_zone(self.hass.config.time_zone)
-            )
+            value = value.replace(tzinfo=dt_util.get_default_time_zone())
         self._attr_native_value = value
+
+        if char := self.entity_description.connected_state:
+            self._attr_available = bool(self.coordinator.get_cached(char))
+        else:
+            self._attr_available = True
+
         super()._handle_coordinator_update()
 
 
@@ -93,7 +137,7 @@ class GardenaBluetoothRemainSensor(GardenaBluetoothEntity, SensorEntity):
 
     def __init__(
         self,
-        coordinator: Coordinator,
+        coordinator: GardenaBluetoothCoordinator,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, {Valve.remaining_open_time.uuid})
@@ -106,7 +150,7 @@ class GardenaBluetoothRemainSensor(GardenaBluetoothEntity, SensorEntity):
             super()._handle_coordinator_update()
             return
 
-        time = datetime.now(timezone.utc) + timedelta(seconds=value)
+        time = datetime.now(UTC) + timedelta(seconds=value)
         if not self._attr_native_value:
             self._attr_native_value = time
             super()._handle_coordinator_update()
@@ -117,3 +161,8 @@ class GardenaBluetoothRemainSensor(GardenaBluetoothEntity, SensorEntity):
             self._attr_native_value = time
             super()._handle_coordinator_update()
             return
+
+    @property
+    def available(self) -> bool:
+        """Sensor only available when open."""
+        return super().available and self._attr_native_value is not None

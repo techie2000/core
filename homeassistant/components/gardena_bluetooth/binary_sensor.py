@@ -1,9 +1,10 @@
 """Support for binary_sensor entities."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from gardena_bluetooth.const import Valve
+from gardena_bluetooth.const import Sensor, Valve
 from gardena_bluetooth.parse import CharacteristicBool
 
 from homeassistant.components.binary_sensor import (
@@ -11,20 +12,24 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import Coordinator, GardenaBluetoothDescriptorEntity
+from .coordinator import GardenaBluetoothConfigEntry
+from .entity import GardenaBluetoothDescriptorEntity
 
 
-@dataclass
+@dataclass(frozen=True)
 class GardenaBluetoothBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Description of entity."""
 
     char: CharacteristicBool = field(default_factory=lambda: CharacteristicBool(""))
+
+    @property
+    def context(self) -> set[str]:
+        """Context needed for update coordinator."""
+        return {self.char.uuid}
 
 
 DESCRIPTIONS = (
@@ -35,16 +40,25 @@ DESCRIPTIONS = (
         entity_category=EntityCategory.DIAGNOSTIC,
         char=Valve.connected_state,
     ),
+    GardenaBluetoothBinarySensorEntityDescription(
+        key=Sensor.connected_state.uuid,
+        translation_key="sensor_connected_state",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        char=Sensor.connected_state,
+    ),
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: GardenaBluetoothConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up binary sensor based on a config entry."""
-    coordinator: Coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     entities = [
-        GardenaBluetoothBinarySensor(coordinator, description)
+        GardenaBluetoothBinarySensor(coordinator, description, description.context)
         for description in DESCRIPTIONS
         if description.key in coordinator.characteristics
     ]

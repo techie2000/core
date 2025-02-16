@@ -1,4 +1,5 @@
 """The tests for the Shell command component."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,7 +11,7 @@ import pytest
 
 from homeassistant.components import shell_command
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import TemplateError
+from homeassistant.exceptions import HomeAssistantError, TemplateError
 from homeassistant.setup import async_setup_component
 
 
@@ -175,6 +176,43 @@ async def test_stdout_captured(mock_output, hass: HomeAssistant) -> None:
 
 
 @patch("homeassistant.components.shell_command._LOGGER.debug")
+async def test_non_text_stdout_capture(
+    mock_output, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test handling of non-text output."""
+    assert await async_setup_component(
+        hass,
+        shell_command.DOMAIN,
+        {
+            shell_command.DOMAIN: {
+                "output_image": "curl -o - https://raw.githubusercontent.com/home-assistant/assets/master/misc/loading-screen.gif"
+            }
+        },
+    )
+
+    # No problem without 'return_response'
+    response = await hass.services.async_call(
+        "shell_command", "output_image", blocking=True
+    )
+
+    await hass.async_block_till_done()
+    assert not response
+
+    # Non-text output throws with 'return_response'
+    with pytest.raises(
+        HomeAssistantError,
+        match="Unable to handle non-utf8 output of command: `curl -o - https://raw.githubusercontent.com/home-assistant/assets/master/misc/loading-screen.gif`",
+    ):
+        response = await hass.services.async_call(
+            "shell_command", "output_image", blocking=True, return_response=True
+        )
+
+    await hass.async_block_till_done()
+    assert not response
+    assert "Unable to handle non-utf8 output of command" in caplog.text
+
+
+@patch("homeassistant.components.shell_command._LOGGER.debug")
 async def test_stderr_captured(mock_output, hass: HomeAssistant) -> None:
     """Test subprocess that has stderr."""
     test_phrase = "I have error"
@@ -216,11 +254,17 @@ async def test_do_not_run_forever(
     )
     await hass.async_block_till_done()
 
-    with patch.object(shell_command, "COMMAND_TIMEOUT", 0.001), patch(
-        "homeassistant.components.shell_command.asyncio.create_subprocess_shell",
-        side_effect=mock_create_subprocess_shell,
+    with (
+        patch.object(shell_command, "COMMAND_TIMEOUT", 0.001),
+        patch(
+            "homeassistant.components.shell_command.asyncio.create_subprocess_shell",
+            side_effect=mock_create_subprocess_shell,
+        ),
     ):
-        with pytest.raises(asyncio.TimeoutError):
+        with pytest.raises(
+            HomeAssistantError,
+            match="Timed out running command: `mock_sleep 10000`, after: 0.001 seconds",
+        ):
             await hass.services.async_call(
                 shell_command.DOMAIN,
                 "test_service",

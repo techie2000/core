@@ -1,4 +1,5 @@
 """ONVIF event abstraction."""
+
 from __future__ import annotations
 
 import asyncio
@@ -32,7 +33,7 @@ from .parsers import PARSERS
 # entities for them.
 UNHANDLED_TOPICS: set[str] = {"tns1:MediaControl/VideoEncoderConfiguration"}
 
-SUBSCRIPTION_ERRORS = (Fault, asyncio.TimeoutError, TransportError)
+SUBSCRIPTION_ERRORS = (Fault, TimeoutError, TransportError)
 CREATE_ERRORS = (ONVIFError, Fault, RequestError, XMLParseError, ValidationError)
 SET_SYNCHRONIZATION_POINT_ERRORS = (*SUBSCRIPTION_ERRORS, TypeError)
 UNSUBSCRIBE_ERRORS = (XMLParseError, *SUBSCRIPTION_ERRORS)
@@ -142,7 +143,6 @@ class EventManager:
         for update_callback in self._listeners:
             update_callback()
 
-    # pylint: disable=protected-access
     async def async_parse_messages(self, messages) -> None:
         """Parse notification message."""
         unique_id = self.unique_id
@@ -157,14 +157,15 @@ class EventManager:
             # tns1:RuleEngine/CellMotionDetector/Motion//.
             # tns1:RuleEngine/CellMotionDetector/Motion
             # tns1:RuleEngine/CellMotionDetector/Motion/
+            # tns1:UserAlarm/IVA/HumanShapeDetect
             #
             # Our parser expects the topic to be
             # tns1:RuleEngine/CellMotionDetector/Motion
-            topic = msg.Topic._value_1.rstrip("/.")
+            topic = msg.Topic._value_1.rstrip("/.")  # noqa: SLF001
 
             if not (parser := PARSERS.get(topic)):
                 if topic not in UNHANDLED_TOPICS:
-                    LOGGER.info(
+                    LOGGER.warning(
                         "%s: No registered handler for event from %s: %s",
                         self.name,
                         unique_id,
@@ -176,7 +177,7 @@ class EventManager:
             event = await parser(unique_id, msg)
 
             if not event:
-                LOGGER.info(
+                LOGGER.warning(
                     "%s: Unable to parse event from %s: %s", self.name, unique_id, msg
                 )
                 return
@@ -251,9 +252,9 @@ class PullPointManager:
 
     async def async_start(self) -> bool:
         """Start pullpoint subscription."""
-        assert (
-            self.state == PullPointManagerState.STOPPED
-        ), "PullPoint manager already started"
+        assert self.state == PullPointManagerState.STOPPED, (
+            "PullPoint manager already started"
+        )
         LOGGER.debug("%s: Starting PullPoint manager", self._name)
         if not await self._async_start_pullpoint():
             self.state = PullPointManagerState.FAILED
@@ -500,9 +501,9 @@ class WebHookManager:
     async def async_start(self) -> bool:
         """Start polling events."""
         LOGGER.debug("%s: Starting webhook manager", self._name)
-        assert (
-            self.state == WebHookManagerState.STOPPED
-        ), "Webhook manager already started"
+        assert self.state == WebHookManagerState.STOPPED, (
+            "Webhook manager already started"
+        )
         assert self._webhook_url is None, "Webhook already registered"
         self._async_register_webhook()
         if not await self._async_start_webhook():

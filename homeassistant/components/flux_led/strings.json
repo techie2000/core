@@ -27,7 +27,7 @@
         "data": {
           "mode": "The chosen brightness mode.",
           "custom_effect_colors": "Custom Effect: List of 1 to 16 [R,G,B] colors. Example: [255,0,255],[60,128,0]",
-          "custom_effect_speed_pct": "Custom Effect: Speed in percents for the effect that switch colors.",
+          "custom_effect_speed_pct": "Custom Effect: Speed in percentage for the effects that switch colors.",
           "custom_effect_transition": "Custom Effect: Type of transition between the colors."
         }
       }
@@ -101,7 +101,7 @@
         },
         "speed_pct": {
           "name": "Speed",
-          "description": "Effect speed for the custom effect (0-100)."
+          "description": "The speed of the effect in % (0-100, default 50)."
         },
         "transition": {
           "name": "Transition",

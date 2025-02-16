@@ -1,10 +1,12 @@
 """Support for number entities."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from gardena_bluetooth.const import DeviceConfiguration, Valve
+from gardena_bluetooth.const import DeviceConfiguration, Sensor, Valve
 from gardena_bluetooth.parse import (
+    Characteristic,
     CharacteristicInt,
     CharacteristicLong,
     CharacteristicUInt16,
@@ -15,26 +17,30 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTime
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import (
-    Coordinator,
-    GardenaBluetoothDescriptorEntity,
-    GardenaBluetoothEntity,
-)
+from .coordinator import GardenaBluetoothConfigEntry, GardenaBluetoothCoordinator
+from .entity import GardenaBluetoothDescriptorEntity, GardenaBluetoothEntity
 
 
-@dataclass
+@dataclass(frozen=True)
 class GardenaBluetoothNumberEntityDescription(NumberEntityDescription):
     """Description of entity."""
 
     char: CharacteristicInt | CharacteristicUInt16 | CharacteristicLong = field(
         default_factory=lambda: CharacteristicInt("")
     )
+    connected_state: Characteristic | None = None
+
+    @property
+    def context(self) -> set[str]:
+        """Context needed for update coordinator."""
+        data = {self.char.uuid}
+        if self.connected_state:
+            data.add(self.connected_state.uuid)
+        return data
 
 
 DESCRIPTIONS = (
@@ -62,35 +68,49 @@ DESCRIPTIONS = (
     GardenaBluetoothNumberEntityDescription(
         key=DeviceConfiguration.rain_pause.uuid,
         translation_key="rain_pause",
-        native_unit_of_measurement=UnitOfTime.DAYS,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
         mode=NumberMode.BOX,
         native_min_value=0.0,
-        native_max_value=127.0,
-        native_step=1.0,
+        native_max_value=7 * 24 * 60,
+        native_step=6 * 60.0,
         entity_category=EntityCategory.CONFIG,
         char=DeviceConfiguration.rain_pause,
     ),
     GardenaBluetoothNumberEntityDescription(
-        key=DeviceConfiguration.season_pause.uuid,
-        translation_key="season_pause",
+        key=DeviceConfiguration.seasonal_adjust.uuid,
+        translation_key="seasonal_adjust",
         native_unit_of_measurement=UnitOfTime.DAYS,
         mode=NumberMode.BOX,
-        native_min_value=0.0,
-        native_max_value=365.0,
+        native_min_value=-128.0,
+        native_max_value=127.0,
         native_step=1.0,
         entity_category=EntityCategory.CONFIG,
-        char=DeviceConfiguration.season_pause,
+        char=DeviceConfiguration.seasonal_adjust,
+    ),
+    GardenaBluetoothNumberEntityDescription(
+        key=Sensor.threshold.uuid,
+        translation_key="sensor_threshold",
+        native_unit_of_measurement=PERCENTAGE,
+        mode=NumberMode.BOX,
+        native_min_value=0.0,
+        native_max_value=100.0,
+        native_step=1.0,
+        entity_category=EntityCategory.CONFIG,
+        char=Sensor.threshold,
+        connected_state=Sensor.connected_state,
     ),
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: GardenaBluetoothConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up entity based on a config entry."""
-    coordinator: Coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     entities: list[NumberEntity] = [
-        GardenaBluetoothNumber(coordinator, description)
+        GardenaBluetoothNumber(coordinator, description, description.context)
         for description in DESCRIPTIONS
         if description.key in coordinator.characteristics
     ]
@@ -110,6 +130,12 @@ class GardenaBluetoothNumber(GardenaBluetoothDescriptorEntity, NumberEntity):
             self._attr_native_value = None
         else:
             self._attr_native_value = float(data)
+
+        if char := self.entity_description.connected_state:
+            self._attr_available = bool(self.coordinator.get_cached(char))
+        else:
+            self._attr_available = True
+
         super()._handle_coordinator_update()
 
     async def async_set_native_value(self, value: float) -> None:
@@ -130,7 +156,7 @@ class GardenaBluetoothRemainingOpenSetNumber(GardenaBluetoothEntity, NumberEntit
 
     def __init__(
         self,
-        coordinator: Coordinator,
+        coordinator: GardenaBluetoothCoordinator,
     ) -> None:
         """Initialize the remaining time entity."""
         super().__init__(coordinator, {Valve.remaining_open_time.uuid})

@@ -15,9 +15,6 @@
         }
       }
     },
-    "abort": {
-      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]"
-    },
     "error": {
       "no_selection": "Please select at least one city/county",
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
@@ -36,7 +33,8 @@
           "_r_to_u": "[%key:component::nina::config::step::user::data::_r_to_u%]",
           "_v_to_z": "[%key:component::nina::config::step::user::data::_v_to_z%]",
           "slots": "[%key:component::nina::config::step::user::data::slots%]",
-          "headline_filter": "[%key:component::nina::config::step::user::data::headline_filter%]"
+          "headline_filter": "[%key:component::nina::config::step::user::data::headline_filter%]",
+          "area_filter": "Whitelist regex to filter warnings based on affected areas"
         }
       }
     },

@@ -1,4 +1,5 @@
 """Support for ISY sensors."""
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -31,8 +32,8 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory, Platform, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .const import (
     _LOGGER,
@@ -45,6 +46,7 @@ from .const import (
 )
 from .entity import ISYNodeEntity
 from .helpers import convert_isy_value_to_hass
+from .models import IsyData
 
 # Disable general purpose and redundant sensors by default
 AUX_DISABLED_BY_DEFAULT_MATCH = ["GV", "DO"]
@@ -71,7 +73,7 @@ ISY_CONTROL_TO_DEVICE_CLASS = {
     "CV": SensorDeviceClass.VOLTAGE,
     "DEWPT": SensorDeviceClass.TEMPERATURE,
     "DISTANC": SensorDeviceClass.DISTANCE,
-    "ETO": SensorDeviceClass.PRECIPITATION_INTENSITY,
+    "ETO": SensorDeviceClass.PRECIPITATION_INTENSITY,  # codespell:ignore eto
     "FATM": SensorDeviceClass.WEIGHT,
     "FREQ": SensorDeviceClass.FREQUENCY,
     "MUSCLEM": SensorDeviceClass.WEIGHT,
@@ -106,10 +108,12 @@ ISY_CONTROL_TO_ENTITY_CATEGORY = {
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the ISY sensor platform."""
-    isy_data = hass.data[DOMAIN][entry.entry_id]
+    isy_data: IsyData = hass.data[DOMAIN][entry.entry_id]
     entities: list[ISYSensorEntity] = []
     devices: dict[str, DeviceInfo] = isy_data.devices
 
@@ -185,7 +189,7 @@ class ISYSensorEntity(ISYNodeEntity, SensorEntity):
 
         # Check if this is a known index pair UOM
         if isinstance(uom, dict):
-            return uom.get(value, value)
+            return uom.get(value, value)  # type: ignore[no-any-return]
 
         if uom in (UOM_INDEX, UOM_ON_OFF):
             return cast(str, self.target.formatted)
@@ -196,13 +200,12 @@ class ISYSensorEntity(ISYNodeEntity, SensorEntity):
 
         # Handle ISY precision and rounding
         value = convert_isy_value_to_hass(value, uom, self.target.prec)
+        if value is None:
+            return None
 
         # Convert temperatures to Home Assistant's unit
         if uom in (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT):
             value = self.hass.config.units.temperature(value, uom)
-
-        if value is None:
-            return None
 
         assert isinstance(value, (int, float))
         return value
@@ -261,6 +264,7 @@ class ISYAuxSensorEntity(ISYSensorEntity):
         """Return the target value."""
         return None if self.target is None else self.target.value
 
+    # pylint: disable-next=hass-missing-super-call
     async def async_added_to_hass(self) -> None:
         """Subscribe to the node control change events.
 

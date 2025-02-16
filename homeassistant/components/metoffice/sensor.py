@@ -1,4 +1,5 @@
 """Support for UK Met Office weather service."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -19,7 +20,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -29,7 +30,7 @@ from homeassistant.helpers.update_coordinator import (
 from . import get_device_info
 from .const import (
     ATTRIBUTION,
-    CONDITION_CLASSES,
+    CONDITION_MAP,
     DOMAIN,
     METOFFICE_COORDINATES,
     METOFFICE_DAILY_COORDINATOR,
@@ -141,7 +142,9 @@ SENSOR_TYPES: tuple[SensorEntityDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the Met Office weather sensor platform."""
     hass_data = hass.data[DOMAIN][entry.entry_id]
@@ -221,11 +224,7 @@ class MetOfficeCurrentSensor(
         elif self.entity_description.key == "weather" and hasattr(
             self.coordinator.data.now, self.entity_description.key
         ):
-            value = [
-                k
-                for k, v in CONDITION_CLASSES.items()
-                if self.coordinator.data.now.weather.value in v
-            ][0]
+            value = CONDITION_MAP.get(self.coordinator.data.now.weather.value)
 
         elif hasattr(self.coordinator.data.now, self.entity_description.key):
             value = getattr(self.coordinator.data.now, self.entity_description.key)
@@ -255,6 +254,6 @@ class MetOfficeCurrentSensor(
         return {
             ATTR_LAST_UPDATE: self.coordinator.data.now.date,
             ATTR_SENSOR_ID: self.entity_description.key,
-            ATTR_SITE_ID: self.coordinator.data.site.id,
+            ATTR_SITE_ID: self.coordinator.data.site.location_id,
             ATTR_SITE_NAME: self.coordinator.data.site.name,
         }

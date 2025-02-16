@@ -1,5 +1,6 @@
 """Test the Whirlpool Sensor domain."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -41,6 +42,8 @@ def side_effect_function_open_door(*args, **kwargs):
     if args[0] == "WashCavity_OpStatusBulkDispense1Level":
         return "3"
 
+    return None
+
 
 async def test_dryer_sensor_values(
     hass: HomeAssistant,
@@ -49,8 +52,8 @@ async def test_dryer_sensor_values(
     entity_registry: er.EntityRegistry,
 ) -> None:
     """Test the sensor value callbacks."""
-    hass.state = CoreState.not_running
-    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, timezone.utc)
+    hass.set_state(CoreState.not_running)
+    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, UTC)
     mock_restore_cache_with_extra_data(
         hass,
         (
@@ -80,7 +83,7 @@ async def test_dryer_sensor_values(
 
     state = await update_sensor_state(hass, entity_id, mock_instance)
     assert state is not None
-    state_id = f"{entity_id.split('_')[0]}_end_time"
+    state_id = f"{entity_id.split('_', maxsplit=1)[0]}_end_time"
     state = hass.states.get(state_id)
     assert state.state == thetimestamp.isoformat()
 
@@ -113,8 +116,8 @@ async def test_washer_sensor_values(
     entity_registry: er.EntityRegistry,
 ) -> None:
     """Test the sensor value callbacks."""
-    hass.state = CoreState.not_running
-    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, timezone.utc)
+    hass.set_state(CoreState.not_running)
+    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, UTC)
     mock_restore_cache_with_extra_data(
         hass,
         (
@@ -150,11 +153,11 @@ async def test_washer_sensor_values(
 
     state = await update_sensor_state(hass, entity_id, mock_instance)
     assert state is not None
-    state_id = f"{entity_id.split('_')[0]}_end_time"
+    state_id = f"{entity_id.split('_', maxsplit=1)[0]}_end_time"
     state = hass.states.get(state_id)
     assert state.state == thetimestamp.isoformat()
 
-    state_id = f"{entity_id.split('_')[0]}_detergent_level"
+    state_id = f"{entity_id.split('_', maxsplit=1)[0]}_detergent_level"
     entry = entity_registry.async_get(state_id)
     assert entry
     assert entry.disabled
@@ -280,8 +283,8 @@ async def test_restore_state(
 ) -> None:
     """Test sensor restore state."""
     # Home assistant is not running yet
-    hass.state = CoreState.not_running
-    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, timezone.utc)
+    hass.set_state(CoreState.not_running)
+    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, UTC)
     mock_restore_cache_with_extra_data(
         hass,
         (
@@ -333,8 +336,8 @@ async def test_callback(
     mock_sensor1_api: MagicMock,
 ) -> None:
     """Test callback timestamp callback function."""
-    hass.state = CoreState.not_running
-    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, timezone.utc)
+    hass.set_state(CoreState.not_running)
+    thetimestamp: datetime = datetime(2022, 11, 29, 00, 00, 00, 00, UTC)
     mock_restore_cache_with_extra_data(
         hass,
         (

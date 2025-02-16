@@ -1,9 +1,16 @@
 """Support for Velbus devices."""
+
 from __future__ import annotations
+
+from collections.abc import Awaitable, Callable, Coroutine
+from functools import wraps
+from typing import Any, Concatenate
 
 from duotecno.unit import BaseUnit
 
-from homeassistant.helpers.entity import DeviceInfo, Entity
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
 
@@ -11,10 +18,9 @@ from .const import DOMAIN
 class DuotecnoEntity(Entity):
     """Representation of a Duotecno entity."""
 
-    _attr_should_poll: bool = False
-    _unit: BaseUnit
+    _attr_should_poll = False
 
-    def __init__(self, unit) -> None:
+    def __init__(self, unit: BaseUnit) -> None:
         """Initialize a Duotecno entity."""
         self._unit = unit
         self._attr_name = unit.get_name()
@@ -34,3 +40,26 @@ class DuotecnoEntity(Entity):
     async def _on_update(self) -> None:
         """When a unit has an update."""
         self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """Available state for the unit."""
+        return self._unit.is_available()
+
+
+def api_call[_T: DuotecnoEntity, **_P](
+    func: Callable[Concatenate[_T, _P], Awaitable[None]],
+) -> Callable[Concatenate[_T, _P], Coroutine[Any, Any, None]]:
+    """Catch command exceptions."""
+
+    @wraps(func)
+    async def cmd_wrapper(self: _T, *args: _P.args, **kwargs: _P.kwargs) -> None:
+        """Wrap all command methods."""
+        try:
+            await func(self, *args, **kwargs)
+        except OSError as exc:
+            raise HomeAssistantError(
+                f"Error calling {func.__name__} on entity {self.entity_id}"
+            ) from exc
+
+    return cmd_wrapper
